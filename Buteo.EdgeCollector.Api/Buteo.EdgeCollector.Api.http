@@ -1,0 +1,6 @@
+@Buteo.EdgeCollector.Api_HostAddress = http://localhost:5277
+
+GET {{Buteo.EdgeCollector.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
