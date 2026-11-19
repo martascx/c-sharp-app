@@ -1,0 +1,14 @@
+services:
+  # Backend: C# API, reachable directly at http://localhost:5000
+  api:
+    build: ./Buteo.EdgeCollector.Api
+    ports:
+      - "5000:8080"
+
+  # Frontend: Angular served by nginx at http://localhost:8080
+  frontend:
+    build: ./Buteo_ui
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
