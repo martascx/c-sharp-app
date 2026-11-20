@@ -1,4 +1,4 @@
-﻿# ButeoPipe — Edge Collector & SOAR API (.NET)
+﻿# Buteo — Edge Collector & SOAR API (.NET)
 
 > **Academias Natixis | Dev Stream** — Projeto de Avaliação do Módulo de C# / .NET
 >
@@ -8,7 +8,7 @@
 
 ## 1. Visão Geral e Objetivo
 
-O **ButeoPipe Edge Collector API** é um motor de ingestão de telemetria e correlação de segurança desenvolvido em **ASP.NET Core (.NET 10)**. A aplicação atua como um coletor central que recebe eventos de segurança enviados por agentes de borda (ou simuladores HTTP), armazena-os em memória através de estruturas `List<T>` protegidas contra concorrência e aplica regras automáticas de deteção de ameaças em tempo real.
+O **Buteo Edge Collector API** é um motor de ingestão de telemetria e correlação de segurança desenvolvido em **ASP.NET Core (.NET 10)**. A aplicação atua como um coletor central que recebe eventos de segurança enviados por agentes de borda (ou simuladores HTTP), armazena-os em memória através de estruturas `List<T>` protegidas contra concorrência e aplica regras automáticas de deteção de ameaças em tempo real.
 
 ### Regras de Correlação Implementadas
 
@@ -26,9 +26,9 @@ O **ButeoPipe Edge Collector API** é um motor de ingestão de telemetria e corr
 ### Estrutura de Diretórios
 
 ```
-ButeoPipe.EdgeCollector/
-├── ButeoPipe.EdgeCollector.sln
-└── ButeoPipe.EdgeCollector.Api/
+Buteo.EdgeCollector/
+├── Buteo.EdgeCollector.sln
+└── Buteo.EdgeCollector.Api/
     ├── Models/          # Entidades de domínio (Host, SecurityEvent, Incident)
     ├── Data/            # Repositório Singleton em memória (List<T> + lock)
     ├── Services/        # Motor de correlação e regras de deteção
@@ -59,8 +59,8 @@ ButeoPipe.EdgeCollector/
 1. **Clonar o repositório:**
 
    ```
-   git clone https://github.com/<TEU_USER>/<NOME_REPO>.git
-   cd ButeoPipe.EdgeCollector
+   git clone https://github.com/martascx/c-sharp-app.git
+   cd Buteo.EdgeCollector
    ```
 2. **Compilar a solução:**
 
@@ -70,7 +70,7 @@ ButeoPipe.EdgeCollector/
 3. **Arrancar a API:**
 
    ```
-   dotnet run --project ButeoPipe.EdgeCollector.Api
+   dotnet run --project Buteo.EdgeCollector.Api
    ```
    *(Nota para ambientes Windows com políticas restritivas WDAC/AppLocker: o projeto está configurado com `<UseAppHost>false</UseAppHost>` no `.csproj` para executar diretamente a `.dll` gerida através do runtime `dotnet.exe` sem gerar executáveis `.exe` não assinados).*
 
