@@ -1,0 +1,13 @@
+using Microsoft.EntityFrameworkCore;
+
+namespace Buteo.EdgeCollector.Api.Data;
+
+public class BancoDbContext : DbContext
+{
+    public BancoDbContext(DbContextOptions<BancoDbContext> options) : base(options)
+    {
+    }
+
+    // Representa a tabela Host da base de dados Banco
+    public DbSet<Models.Host> Hosts { get; set; }
+}

@@ -1,5 +1,7 @@
 CREATE DATABASE Banco;
 
+GO
+
 USE Banco;
 
 CREATE TABLE Client( --não deixava criar com nome User
@@ -7,7 +9,7 @@ CREATE TABLE Client( --não deixava criar com nome User
 	Name varchar(50) not null,
 	IsActive BIT not null DEFAULT 1,
 	Region nvarchar (50) not null,
-	PasswordHash varchar(50) null,
+	PasswordHash varchar(255) null,
 	IBAN varchar(50) not null UNIQUE,
 	Amount DECIMAL(10,2) not null DEFAULT 0,
 
@@ -53,7 +55,7 @@ CREATE TABLE SecurityEvent(
 CREATE TABLE Incident(
 	IncidentId INT IDENTITY not null PRIMARY KEY,
 	SecurityEventID INT not null,
-	Title nvarchar(35) not null,
+	Title nvarchar(100) not null,
 	IncidentDescription nvarchar(500) null,
 	Severity int not null,
 	Status nvarchar(20) not null,
@@ -82,9 +84,6 @@ CREATE TABLE DetectionRule (
     CONSTRAINT CK_DetectionRule_TimeWindow
         CHECK (TimeWindowMinutes IS NULL OR TimeWindowMinutes > 0)
 )
-
-ALTER TABLE Incident
-ADD DetectionRuleID INT NULL;
 
 ALTER TABLE Incident
 ADD CONSTRAINT FK_Incident_DetectionRule
@@ -177,15 +176,15 @@ VALUES
  INSERT INTO SecurityEvent
 (HostID, TransactionID, EventType, RawPayload, Timestamp, IPAddress)
 VALUES
-(1, 17, 'TRANSACTION', 
+(1, 1, 'TRANSACTION', 
  '{"amount":250,"result":"success"}',
  '2026-11-20 09:00:01', '192.168.1.10'),
 
-(2, 18, 'TRANSACTION',
+(2, 3, 'TRANSACTION',
  '{"amount":7500,"result":"success","location":"Unknown"}',
  '2026-11-20 09:10:01', '203.0.113.25'),
 
-(1, 19, 'TRANSACTION',
+(1, 5, 'TRANSACTION',
  '{"amount":12000,"result":"success"}',
  '2026-11-20 09:15:01', '198.51.100.40'),
 
@@ -204,19 +203,19 @@ VALUES
   INSERT INTO Incident
 (SecurityEventID, DetectionRuleID, Title, IncidentDescription, Severity, Status, Timestamp)
 VALUES
-(7, 1, 'Large Transaction',
+(2, 1, 'Large Transaction',
  'A transaction exceeded the configured amount threshold.',
  3, 'New', '2026-11-20 09:10:02'),
 
-(8, 6, 'Large Transfer',
+(3, 6, 'Large Transfer',
  'A transfer exceeded the configured transfer threshold.',
  4, 'Investigating', '2026-11-20 09:15:02'),
 
-(9, 4, 'Multiple Failed Logins',
+(4, 4, 'Multiple Failed Logins',
  'Multiple failed login attempts were detected.',
  4, 'New', '2026-11-20 09:20:01'),
 
-(10, 5, 'Inactive Host',
+(5, 5, 'Inactive Host',
  'The host stopped sending heartbeat events.',
  3, 'Investigating', '2026-11-20 09:30:01');
  
