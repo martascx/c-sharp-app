@@ -16,4 +16,8 @@ public class BancoDbContext : DbContext
     public DbSet<Models.BankTransaction> BankTransactions { get; set; }
 
     public DbSet<Models.SecurityEvent> SecurityEvents { get; set; }
+
+    public DbSet<Models.Incident> Incidents { get; set; }
+
+    public DbSet<Models.DetectionRule> DetectionRules { get; set; }
 }
