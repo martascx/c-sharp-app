@@ -1,4 +1,5 @@
 using Buteo.EdgeCollector.Api.Data;
+using Buteo.EdgeCollector.Api.Endpoints;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,5 +28,8 @@ app.MapGet("/api/hosts", async (BancoDbContext db) =>
     var hosts = await db.Hosts.ToListAsync();
     return Results.Ok(hosts);
 });
+
+// Endpoints dos eventos de segurança (issues #3, #4, #5)
+app.MapSecurityEventEndpoints();
 
 app.Run();
