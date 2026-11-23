@@ -1,5 +1,4 @@
 services:
-  # Database: SQL Server, reachable from your PC at localhost,1433 (SSMS / Azure Data Studio)
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
@@ -8,7 +7,7 @@ services:
     ports:
       - "1433:1433"
     volumes:
-      # Keeps the data when containers stop (docker compose down -v wipes it)
+      # Keeps the data when containers stop (docker compose down -v to wipe it)
       - sqldata:/var/opt/mssql
     healthcheck:
       # Healthy once SQL Server answers a simple query
@@ -18,7 +17,6 @@ services:
       retries: 12
       start_period: 20s
 
-  # One-off job: creates and fills the Banco database from bdqueries.sql, then exits.
   # Skipped if the database already exists.
   db-init:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -49,7 +47,6 @@ services:
     ports:
       - "5000:8080"
     environment:
-      # Inside Docker the database is the "db" service, not localhost
       ConnectionStrings__DefaultConnection: "Server=db,1433;Database=Banco;User Id=sa;Password=${SA_PASSWORD:-ButeoPassword123!};TrustServerCertificate=True;"
     depends_on:
       db-init:
