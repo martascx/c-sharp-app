@@ -229,3 +229,11 @@ VALUES
 
  SELECT * FROM Incident
 
+UPDATE DetectionRule SET IsEnabled = 0 WHERE DetectionRuleID = 1;
+
+UPDATE DetectionRule 
+SET RuleName = 'High Client Activity (1h)',
+    Description = 'Detects a single client making too many transaction requests within 1 hour.',
+    EventType = 'CLIENT_HOURLY_LIMIT',
+    Threshold = 10
+WHERE DetectionRuleID = 3;

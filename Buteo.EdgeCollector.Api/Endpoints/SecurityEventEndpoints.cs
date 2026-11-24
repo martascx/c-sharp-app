@@ -2,6 +2,7 @@ using System.Net;
 using Buteo.EdgeCollector.Api.Data;
 using Buteo.EdgeCollector.Api.Dtos;
 using Buteo.EdgeCollector.Api.Models;
+using Buteo.EdgeCollector.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Buteo.EdgeCollector.Api.Endpoints;
@@ -35,7 +36,7 @@ public static class SecurityEventEndpoints
         });
 
         // #4 - POST /api/events -> registers a suspicious event for the admin to review
-        events.MapPost("/api/events", async (CreateSecurityEventRequest request, BancoDbContext db) =>
+        events.MapPost("/api/events", async (CreateSecurityEventRequest request, BancoDbContext db, RuleEngineService ruleEngine) =>
         {
             // 400 Bad Request: the data itself is invalid
             if (string.IsNullOrWhiteSpace(request.EventType) || request.EventType.Length > 50)
@@ -67,6 +68,9 @@ public static class SecurityEventEndpoints
 
             db.SecurityEvents.Add(securityEvent);
             await db.SaveChangesAsync();
+
+            // avalia as regras ativas contra o evento acabado de gravar
+            await ruleEngine.EvaluateEventAsync(securityEvent);
 
             // 201 Created + Location header pointing to GET /api/events/{id}
             return Results.Created($"/api/events/{securityEvent.SecurityEventID}", securityEvent);
