@@ -71,5 +71,22 @@ public static class SecurityEventEndpoints
             // 201 Created + Location header pointing to GET /api/events/{id}
             return Results.Created($"/api/events/{securityEvent.SecurityEventID}", securityEvent);
         });
+
+        // #6 - DELETE /api/events/id -> deletes event based on id
+        events.MapDelete("/api/events/{id:int}", async (int id, BancoDbContext db) =>
+        {
+            var securityEvent = await db.SecurityEvents.FindAsync(id);
+
+            if (securityEvent is null)
+                return Results.NotFound(new { error = $"Event {id} not found." });
+
+            if (await db.Incidents.AnyAsync(i => i.SecurityEventID == id))
+                return Results.Conflict(new { error = $"Event {id} has incidents and cannot be deleted." });
+
+            db.SecurityEvents.Remove(securityEvent);
+            await db.SaveChangesAsync();
+
+            return Results.NoContent();
+        });
     }
 }
