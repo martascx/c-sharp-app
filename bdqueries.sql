@@ -229,3 +229,14 @@ VALUES
 
  SELECT * FROM Incident
 
+UPDATE DetectionRule SET IsEnabled = 0 WHERE DetectionRuleID = 1;
+
+UPDATE DetectionRule 
+SET RuleName = 'High Client Activity (1h)',
+    Description = 'Detects a single client making too many transaction requests within 1 hour.',
+    EventType = 'CLIENT_HOURLY_LIMIT',
+    Threshold = 10
+WHERE DetectionRuleID = 3;
+
+INSERT INTO Client (Name, IsActive, Region, PasswordHash, IBAN, Amount)
+VALUES ('JoaoMagano', 1, 'Portugal', '$2b$10$ALDpKtBdD2yOtXs.2JaOBeP0Q0WOI69OZjLD9mBbYDW9UWyIchEty', 'PT50000100000000000000106', 0);
