@@ -237,3 +237,6 @@ SET RuleName = 'High Client Activity (1h)',
     EventType = 'CLIENT_HOURLY_LIMIT',
     Threshold = 10
 WHERE DetectionRuleID = 3;
+
+INSERT INTO Client (Name, IsActive, Region, PasswordHash, IBAN, Amount)
+VALUES ('JoaoMagano', 1, 'Portugal', '$2b$10$ALDpKtBdD2yOtXs.2JaOBeP0Q0WOI69OZjLD9mBbYDW9UWyIchEty', 'PT50000100000000000000106', 0);
