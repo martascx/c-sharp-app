@@ -1,4 +1,5 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 
 type Page = 'Dashboard' | 'Hosts' | 'Security Events' | 'Incidents' | 'Detection Rules';
 type Severity = 'Critical' | 'High' | 'Medium' | 'Low';
@@ -28,6 +29,22 @@ interface DetectionRule {
   styleUrl: './app.css',
 })
 export class App {
+  private readonly http = inject(HttpClient);
+  private readonly severityNames: Severity[] = ['Low', 'Medium', 'High', 'Critical'];
+
+  constructor() {
+    this.http.get<any[]>('/api/incidents').subscribe(list => this.incidents.set(list.map(i => ({
+      incidentId: i.incidentId,
+      title: i.title,
+      description: i.incidentDescription ?? '',
+      severity: this.severityNames[i.severity - 1],
+      status: i.status,
+      host: `Event #${i.securityEventID}`,
+      timestamp: i.timestamp.replace('T', ' ').slice(0, 16),
+      rule: `Rule #${i.detectionRuleID}`,
+    }))));
+  }
+
   readonly pages: Page[] = ['Dashboard', 'Hosts', 'Security Events', 'Incidents', 'Detection Rules'];
   readonly activePage = signal<Page>('Dashboard');
   readonly searchTerm = signal('');
@@ -84,6 +101,12 @@ export class App {
   updateIncident(id: number, status: IncidentStatus): void {
     this.incidents.update(items => items.map(item => item.incidentId === id ? { ...item, status } : item));
     this.showToast(`Incident #${id} marked as ${status.toLowerCase()}.`);
+  }
+  deleteIncident(id: number): void {
+    this.http.delete(`/api/incidents/${id}`).subscribe(() => {
+      this.incidents.update(items => items.filter(item => item.incidentId !== id));
+      this.showToast(`Incident #${id} deleted.`);
+    });
   }
   toggleRule(id: number): void {
     this.rules.update(items => items.map(rule => rule.id === id ? { ...rule, enabled: !rule.enabled } : rule));
