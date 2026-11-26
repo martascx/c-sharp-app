@@ -27,6 +27,7 @@ app.UseHttpsRedirection();
 // Endpoints dos eventos de segurança (issues #3, #4, #5)
 app.MapSecurityEventEndpoints();
 app.MapHostEndpoints();
+app.MapIncidentEndpoints();
 // Login do admin (issue #1)
 app.MapAuthEndpoints();
 

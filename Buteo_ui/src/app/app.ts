@@ -1,4 +1,5 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 
 type Page = 'Dashboard' | 'Hosts' | 'Security Events' | 'Incidents' | 'Detection Rules';
 type Severity = 'Critical' | 'High' | 'Medium' | 'Low';
@@ -28,37 +29,57 @@ interface DetectionRule {
   styleUrl: './app.css',
 })
 export class App {
+  private readonly http = inject(HttpClient);
+  private readonly severityNames: Severity[] = ['Low', 'Medium', 'High', 'Critical'];
+
+  readonly user = signal('');
+  readonly loginError = signal('');
+
+  login(name: string, password: string): void {
+    this.http.post<{ name: string }>('/api/auth/login', { name, password }).subscribe({
+      next: result => {
+        this.loginError.set('');
+        this.user.set(result.name);
+        this.loadData();
+      },
+      error: () => this.loginError.set('Invalid credentials.'),
+    });
+  }
+
+  private fmt(value: string): string {
+    return value.replace('T', ' ').slice(0, 16);
+  }
+
+  private loadData(): void {
+    this.loadIncidents();
+    this.http.get<any[]>('/api/hosts').subscribe(list => this.hosts.set(list.map(h => ({ ...h, lastSeen: this.fmt(h.timestamp) }))));
+    this.http.get<any[]>('/api/events').subscribe(list => this.events.set(list.map(e => ({ ...e, timestamp: this.fmt(e.timestamp), summary: e.rawPayload }))));
+  }
+
+  private loadIncidents(): void {
+    this.http.get<any[]>('/api/incidents').subscribe(list => this.incidents.set(list.map(i => ({
+      incidentId: i.incidentId,
+      title: i.title,
+      description: i.incidentDescription ?? '',
+      severity: this.severityNames[i.severity - 1],
+      status: i.status,
+      host: `Event #${i.securityEventID}`,
+      timestamp: this.fmt(i.timestamp),
+      rule: `Rule #${i.detectionRuleID}`,
+    }))));
+  }
+
   readonly pages: Page[] = ['Dashboard', 'Hosts', 'Security Events', 'Incidents', 'Detection Rules'];
   readonly activePage = signal<Page>('Dashboard');
   readonly searchTerm = signal('');
   readonly severityFilter = signal('All');
   readonly toast = signal('');
 
-  readonly hosts = signal<Host[]>([
-    { hostID: 1, hostname: 'BANK-CORE-01', ipAddress: '10.20.1.10', osType: 'Windows Server', hostStatus: true, region: 'Lisbon', lastSeen: 'Just now' },
-    { hostID: 2, hostname: 'BANK-AUTH-01', ipAddress: '10.20.1.11', osType: 'Ubuntu Linux', hostStatus: true, region: 'Lisbon', lastSeen: '1 min ago' },
-    { hostID: 3, hostname: 'BANK-DB-01', ipAddress: '10.20.2.20', osType: 'Windows Server', hostStatus: true, region: 'Porto', lastSeen: '2 min ago' },
-    { hostID: 4, hostname: 'ATM-GW-04', ipAddress: '10.20.4.14', osType: 'Ubuntu Linux', hostStatus: false, region: 'Braga', lastSeen: '18 min ago' },
-    { hostID: 5, hostname: 'BANK-WEB-02', ipAddress: '10.20.1.22', osType: 'Ubuntu Linux', hostStatus: true, region: 'Lisbon', lastSeen: 'Just now' },
-    { hostID: 6, hostname: 'SWIFT-GW-01', ipAddress: '10.20.5.10', osType: 'Windows Server', hostStatus: true, region: 'Porto', lastSeen: '4 min ago' },
-  ]);
+  readonly hosts = signal<Host[]>([]);
 
-  readonly events = signal<SecurityEvent[]>([
-    { securityEventID: 1048, eventType: 'AUTH_FAIL', hostID: 2, ipAddress: '185.220.101.14', timestamp: '14:32:08', summary: 'Repeated authentication failures detected' },
-    { securityEventID: 1047, eventType: 'BANK_TX', hostID: 1, ipAddress: '10.20.1.10', timestamp: '14:30:51', summary: 'High-value transfer submitted' },
-    { securityEventID: 1046, eventType: 'PRIVILEGE_ESCALATION', hostID: 3, ipAddress: '10.20.2.20', timestamp: '14:28:17', summary: 'Unexpected permission change' },
-    { securityEventID: 1045, eventType: 'HOST_HEARTBEAT', hostID: 5, ipAddress: '10.20.1.22', timestamp: '14:25:03', summary: 'Host heartbeat received' },
-    { securityEventID: 1044, eventType: 'AUTH_FAIL', hostID: 2, ipAddress: '185.220.101.14', timestamp: '14:21:42', summary: 'Authentication attempt rejected' },
-    { securityEventID: 1043, eventType: 'HOST_STATUS', hostID: 4, ipAddress: '10.20.4.14', timestamp: '14:18:11', summary: 'Host stopped reporting' },
-  ]);
+  readonly events = signal<SecurityEvent[]>([]);
 
-  readonly incidents = signal<Incident[]>([
-    { incidentId: 2308, title: 'Repeated authentication failures', description: 'Multiple failed sign-in attempts from an external IP address.', severity: 'Critical', status: 'New', host: 'BANK-AUTH-01', timestamp: '14:32', rule: 'AUTH-001 · Brute-force pattern' },
-    { incidentId: 2307, title: 'High-value bank transaction', description: 'A transaction exceeded the configured monitoring threshold.', severity: 'High', status: 'Investigating', host: 'BANK-CORE-01', timestamp: '14:30', rule: 'TX-003 · Large transaction' },
-    { incidentId: 2306, title: 'Privilege change detected', description: 'An unexpected administrative permission change was recorded.', severity: 'Critical', status: 'Investigating', host: 'BANK-DB-01', timestamp: '14:28', rule: 'IAM-002 · Privilege escalation' },
-    { incidentId: 2305, title: 'Host heartbeat missing', description: 'The host has not reported telemetry within the expected interval.', severity: 'Medium', status: 'New', host: 'ATM-GW-04', timestamp: '14:18', rule: 'HOST-004 · Host availability' },
-    { incidentId: 2304, title: 'Unusual login location', description: 'Authentication originated from an uncommon network location.', severity: 'Medium', status: 'Resolved', host: 'BANK-AUTH-01', timestamp: '13:54', rule: 'AUTH-006 · Location anomaly' },
-  ]);
+  readonly incidents = signal<Incident[]>([]);
 
   readonly rules = signal<DetectionRule[]>([
     { id: 1, name: 'Brute-force pattern', description: 'Repeated failed authentication attempts from the same source.', eventType: 'AUTH_FAIL', threshold: '5 attempts / 5 min', severity: 'Critical', enabled: true },
@@ -67,6 +88,30 @@ export class App {
     { id: 4, name: 'Host availability', description: 'Detects monitored hosts that stop reporting.', eventType: 'HOST_STATUS', threshold: '15 min inactive', severity: 'Medium', enabled: true },
   ]);
 
+  readonly severityCounts = computed(() => {
+    const open = this.incidents().filter(i => i.status !== 'Resolved');
+    return {
+      Critical: open.filter(i => i.severity === 'Critical').length,
+      High: open.filter(i => i.severity === 'High').length,
+      Medium: open.filter(i => i.severity === 'Medium').length,
+      Low: open.filter(i => i.severity === 'Low').length,
+    };
+  });
+  readonly donutBackground = computed(() => {
+    const counts = this.severityCounts();
+    const values = [counts.Critical, counts.High, counts.Medium, counts.Low];
+    const total = values.reduce((a, b) => a + b, 0);
+    if (!total) return '#edf0f5';
+    const colors = ['#d75d61', '#e5a34c', '#5a9ce1', '#a6b1bf'];
+    let start = 0;
+    const stops = values.map((v, i) => {
+      const end = start + (v / total) * 100;
+      const stop = `${colors[i]} ${start}% ${end}%`;
+      start = end;
+      return stop;
+    });
+    return `conic-gradient(${stops.join(', ')})`;
+  });
   readonly openIncidents = computed(() => this.incidents().filter(i => i.status !== 'Resolved').length);
   readonly criticalIncidents = computed(() => this.incidents().filter(i => i.severity === 'Critical' && i.status !== 'Resolved').length);
   readonly onlineHosts = computed(() => this.hosts().filter(h => h.hostStatus).length);
@@ -84,6 +129,12 @@ export class App {
   updateIncident(id: number, status: IncidentStatus): void {
     this.incidents.update(items => items.map(item => item.incidentId === id ? { ...item, status } : item));
     this.showToast(`Incident #${id} marked as ${status.toLowerCase()}.`);
+  }
+  deleteIncident(id: number): void {
+    this.http.delete(`/api/incidents/${id}`).subscribe(() => {
+      this.incidents.update(items => items.filter(item => item.incidentId !== id));
+      this.showToast(`Incident #${id} deleted.`);
+    });
   }
   toggleRule(id: number): void {
     this.rules.update(items => items.map(rule => rule.id === id ? { ...rule, enabled: !rule.enabled } : rule));

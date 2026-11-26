@@ -238,6 +238,7 @@ SET RuleName = 'High Client Activity (1h)',
     Threshold = 10
 WHERE DetectionRuleID = 3;
 
+<<<<<<< HEAD
 SELECT * FROM Incident ORDER BY IncidentId DESC;
 SELECT TOP 10 * FROM SecurityEvent ORDER BY SecurityEventID DESC;
 
@@ -253,3 +254,7 @@ WHERE HostID = 2;
 
 SELECT TOP 12 * FROM Incident ORDER BY IncidentID DESC;
 SELECT HostID, Hostname, HostStatus, Timestamp FROM Host WHERE HostID = 2;
+=======
+INSERT INTO Client (Name, IsActive, Region, PasswordHash, IBAN, Amount)
+VALUES ('JoaoMagano', 1, 'Portugal', '$2b$10$ALDpKtBdD2yOtXs.2JaOBeP0Q0WOI69OZjLD9mBbYDW9UWyIchEty', 'PT50000100000000000000106', 0);
+>>>>>>> main
