@@ -102,10 +102,12 @@ export class App {
   readonly incidents = signal<Incident[]>([]);
 
   readonly rules = signal<DetectionRule[]>([
-    { id: 1, name: 'Brute-force pattern', description: 'Repeated failed authentication attempts from the same source.', eventType: 'AUTH_FAIL', threshold: '5 attempts / 5 min', severity: 'Critical', enabled: true },
-    { id: 2, name: 'Privilege escalation', description: 'Detects unexpected administrative permission changes.', eventType: 'PRIVILEGE_ESCALATION', threshold: 'Any occurrence', severity: 'Critical', enabled: true },
-    { id: 3, name: 'Large transaction', description: 'Flags transactions above the configured amount.', eventType: 'BANK_TX', threshold: '€10,000', severity: 'High', enabled: true },
-    { id: 4, name: 'Host availability', description: 'Detects monitored hosts that stop reporting.', eventType: 'HOST_STATUS', threshold: '15 min inactive', severity: 'Medium', enabled: true },
+    { id: 1, name: 'Large Transaction', description: 'Detects transactions above the configured amount.', eventType: 'TRANSACTION', threshold: '> €5,000', severity: 'High', enabled: false },
+    { id: 2, name: 'High Transaction Frequency', description: 'Detects an unusually high number of transactions within a time window.', eventType: 'TRANSACTION_FREQUENCY', threshold: '5 requests / 1 min', severity: 'High', enabled: true },
+    { id: 3, name: 'High Client Activity (1h)', description: 'Detects a single client making too many transaction requests within 1 hour.', eventType: 'CLIENT_HOURLY_LIMIT', threshold: '10 transactions / 60 min', severity: 'Medium', enabled: true },
+    { id: 4, name: 'Repeated Failed Logins', description: 'Detects repeated failed authentication attempts.', eventType: 'FAILED_LOGIN', threshold: '5 attempts / 10 min', severity: 'Critical', enabled: true },
+    { id: 5, name: 'Inactive Host', description: 'Detects hosts that have stopped reporting activity.', eventType: 'HOST_INACTIVITY', threshold: '30 min inactive', severity: 'High', enabled: true },
+    { id: 6, name: 'Large Transfer', description: 'Detects transfers above the configured amount.', eventType: 'TRANSFER', threshold: '> €10,000', severity: 'Critical', enabled: true },
   ]);
 
   readonly severityCounts = computed(() => {
@@ -155,11 +157,6 @@ export class App {
       this.incidents.update(items => items.filter(item => item.incidentId !== id));
       this.showToast(`Incident #${id} deleted.`);
     });
-  }
-  toggleRule(id: number): void {
-    this.rules.update(items => items.map(rule => rule.id === id ? { ...rule, enabled: !rule.enabled } : rule));
-    const rule = this.rules().find(item => item.id === id);
-    this.showToast(`${rule?.name ?? 'Rule'} ${rule?.enabled ? 'enabled' : 'disabled'}.`);
   }
   showToast(message: string): void {
     this.toast.set(message);
