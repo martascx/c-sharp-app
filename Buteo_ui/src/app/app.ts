@@ -35,15 +35,28 @@ export class App {
   readonly user = signal('');
   readonly loginError = signal('');
 
+  private incidentsLoaded = false;
+
+  constructor() {
+    const saved = sessionStorage.getItem('user');
+    if (saved) this.start(saved);
+  }
+
   login(name: string, password: string): void {
     this.http.post<{ name: string }>('/api/auth/login', { name, password }).subscribe({
       next: result => {
         this.loginError.set('');
-        this.user.set(result.name);
-        this.loadData();
+        sessionStorage.setItem('user', result.name);
+        this.start(result.name);
       },
       error: () => this.loginError.set('Invalid credentials.'),
     });
+  }
+
+  private start(name: string): void {
+    this.user.set(name);
+    this.loadData();
+    setInterval(() => this.loadData(), 5000); // de 5 em 5 segundos dá refresh para atualizar os dados da dashboard
   }
 
   private fmt(value: string): string {
@@ -57,16 +70,23 @@ export class App {
   }
 
   private loadIncidents(): void {
-    this.http.get<any[]>('/api/incidents').subscribe(list => this.incidents.set(list.map(i => ({
-      incidentId: i.incidentId,
-      title: i.title,
-      description: i.incidentDescription ?? '',
-      severity: this.severityNames[i.severity - 1],
-      status: i.status,
-      host: `Event #${i.securityEventID}`,
-      timestamp: this.fmt(i.timestamp),
-      rule: `Rule #${i.detectionRuleID}`,
-    }))));
+    const statuses = new Map(this.incidents().map(i => [i.incidentId, i.status]));
+    this.http.get<any[]>('/api/incidents').subscribe(list => {
+      const loaded: Incident[] = list.map(i => ({
+        incidentId: i.incidentId,
+        title: i.title,
+        description: i.incidentDescription ?? '',
+        severity: this.severityNames[i.severity - 1],
+        status: statuses.get(i.incidentId) ?? i.status,
+        host: `Event #${i.securityEventID}`,
+        timestamp: this.fmt(i.timestamp),
+        rule: `Rule #${i.detectionRuleID}`,
+      }));
+      const added = loaded.filter(i => !statuses.has(i.incidentId));
+      if (this.incidentsLoaded && added.length) this.showToast(`New incident detected: ${added[0].title}`);
+      this.incidentsLoaded = true;
+      this.incidents.set(loaded);
+    });
   }
 
   readonly pages: Page[] = ['Dashboard', 'Hosts', 'Security Events', 'Incidents', 'Detection Rules'];
