@@ -237,3 +237,19 @@ SET RuleName = 'High Client Activity (1h)',
     EventType = 'CLIENT_HOURLY_LIMIT',
     Threshold = 10
 WHERE DetectionRuleID = 3;
+
+SELECT * FROM Incident ORDER BY IncidentId DESC;
+SELECT TOP 10 * FROM SecurityEvent ORDER BY SecurityEventID DESC;
+
+INSERT INTO BankTransaction (SenderIBAN, ReceiverIBAN, IPAddress, Amount, Timestamp)
+SELECT TOP 10 'PT50000100000000000000101', 'PT50000100000000000000102', '192.168.1.10', 15.00, SYSUTCDATETIME()
+FROM sys.objects;
+
+SELECT TOP 1 TransactionID FROM BankTransaction ORDER BY TransactionID DESC;
+
+UPDATE Host 
+SET HostStatus = 1, Timestamp = DATEADD(MINUTE, -60, SYSUTCDATETIME()) 
+WHERE HostID = 2;
+
+SELECT TOP 12 * FROM Incident ORDER BY IncidentID DESC;
+SELECT HostID, Hostname, HostStatus, Timestamp FROM Host WHERE HostID = 2;

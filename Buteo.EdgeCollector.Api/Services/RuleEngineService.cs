@@ -7,143 +7,186 @@ namespace Buteo.EdgeCollector.Api.Services;
 
 public class RuleEngineService
 {
+    // Atributo privado para aceder à base de dados (o "_" é convenção para atributos privados)
     private readonly BancoDbContext _db;
 
+    // Construtor: recebe a ligação à base de dados quando o serviço é criado
     public RuleEngineService(BancoDbContext db)
     {
         _db = db;
     }
 
-    // procura regras ativas para o evento e abre incidentes se necessário
+    // Método principal (public para ser chamado pelos endpoints): avalia se um evento viola alguma regra
     public async Task EvaluateEventAsync(SecurityEvent securityEvent)
     {
-        var activeRules = await _db.DetectionRules
+        // Vai buscar à BD apenas as regras ativas (IsEnabled) que correspondem ao tipo deste evento
+        List<DetectionRule> activeRules = await _db.DetectionRules
             .Where(r => r.IsEnabled && r.EventType == securityEvent.EventType)
             .ToListAsync();
 
-        foreach (var rule in activeRules)
+        // Percorre cada regra encontrada
+        foreach (DetectionRule rule in activeRules)
         {
-            var (triggered, details) = securityEvent.EventType switch
-            {
-                EventTypes.FailedLogin => await CheckFailedLoginAsync(securityEvent, rule),
-                EventTypes.Transfer => await CheckLargeTransferAsync(securityEvent, rule),
-                EventTypes.TransactionFrequency => await CheckTransactionBurstAsync(securityEvent, rule),
-                EventTypes.ClientHourlyLimit => await CheckClientHourlyLimitAsync(securityEvent, rule),
-                _ => (false, string.Empty)
-            };
+            // Guarda a mensagem do alerta. Se continuar vazia no fim, a regra não disparou
+            string incidentDetails = "";
 
-            if (triggered)
+            // Encaminha para o método da regra certa consoante o tipo de evento
+            switch (securityEvent.EventType)
             {
-                _db.Incidents.Add(new Incident
+                case EventTypes.FailedLogin:
+                    incidentDetails = await CheckFailedLoginAsync(securityEvent, rule);
+                    break;
+
+                case EventTypes.Transfer:
+                    incidentDetails = await CheckLargeTransferAsync(securityEvent, rule);
+                    break;
+
+                case EventTypes.TransactionFrequency:
+                    incidentDetails = await CheckTransactionBurstAsync(securityEvent, rule);
+                    break;
+
+                case EventTypes.ClientHourlyLimit:
+                    incidentDetails = await CheckClientHourlyLimitAsync(securityEvent, rule);
+                    break;
+            }
+
+            // Se o método devolveu texto, a regra foi violada e criamos um incidente na BD
+            if (incidentDetails != "")
+            {
+                Incident newIncident = new Incident
                 {
                     SecurityEventID = securityEvent.SecurityEventID,
                     DetectionRuleID = rule.DetectionRuleID,
                     Title = rule.RuleName,
-                    IncidentDescription = details,
+                    IncidentDescription = incidentDetails,
                     Severity = rule.Severity,
                     Status = "New",
                     Timestamp = DateTime.UtcNow
-                });
+                };
+
+                _db.Incidents.Add(newIncident);
             }
         }
 
+        // Grava todos os incidentes criados na base de dados de uma só vez
         await _db.SaveChangesAsync();
     }
 
-    // regra 1: conta tentativas de login falhadas dentro da janela temporal 
-    private async Task<(bool Triggered, string Details)> CheckFailedLoginAsync(SecurityEvent ev, DetectionRule rule)
+    // Regra 1 (private porque só é usada dentro desta classe): verifica tentativas de login falhadas do mesmo IP
+    private async Task<string> CheckFailedLoginAsync(SecurityEvent ev, DetectionRule rule)
     {
+        // Lê os limites da BD ou usa valores por defeito caso estejam a null
         int windowMinutes = rule.TimeWindowMinutes ?? 10;
         decimal maxAttempts = rule.Threshold ?? 5;
-        var windowStart = DateTime.UtcNow.AddMinutes(-windowMinutes);
+        DateTime windowStart = DateTime.UtcNow.AddMinutes(-windowMinutes);
 
+        // Conta quantos logins falhados este IP teve dentro da janela de tempo
         int failedAttempts = await _db.SecurityEvents.CountAsync(e =>
             e.EventType == EventTypes.FailedLogin &&
             e.IPAddress == ev.IPAddress &&
             e.Timestamp >= windowStart);
 
-        bool triggered = failedAttempts >= maxAttempts;
-        string details = $"{failedAttempts} tentativas de login falhadas a partir do IP {ev.IPAddress} nos últimos {windowMinutes} minutos.";
+        if (failedAttempts >= maxAttempts)
+        {
+            return failedAttempts + " tentativas de login falhadas do IP " + ev.IPAddress + " nos últimos " + windowMinutes + " minutos.";
+        }
 
-        return (triggered, details);
+        return "";
     }
 
-    // regra 2: verifica se o montante da transferência ultrapassa o valor que queremos 
-    private async Task<(bool Triggered, string Details)> CheckLargeTransferAsync(SecurityEvent ev, DetectionRule rule)
+    // Regra 2: verifica se o valor da transferência ultrapassa o limite máximo permitido
+    private async Task<string> CheckLargeTransferAsync(SecurityEvent ev, DetectionRule rule)
     {
         decimal maxAmount = rule.Threshold ?? 10000m;
-        decimal amount = await ResolveTransactionAmountAsync(ev);
+        decimal amount = await GetTransactionAmountAsync(ev);
 
-        bool triggered = amount > maxAmount;
-        string details = $"Transferência de {amount:N2} € excedeu o limite de {maxAmount:N2} € (requer justificação).";
+        if (amount > maxAmount)
+        {
+            return "Transferência de " + amount.ToString("N2") + " € excedeu o limite de " + maxAmount.ToString("N2") + " €.";
+        }
 
-        return (triggered, details);
+        return "";
     }
 
-    // regra 3: deteta rajadas de transações vindas do mesmo IP em um determinado espaço de tempo
-    private async Task<(bool Triggered, string Details)> CheckTransactionBurstAsync(SecurityEvent ev, DetectionRule rule)
+    // Regra 3: deteta várias transações seguidas vindas do mesmo IP num curto espaço de tempo
+    private async Task<string> CheckTransactionBurstAsync(SecurityEvent ev, DetectionRule rule)
     {
         int windowMinutes = rule.TimeWindowMinutes ?? 1;
         decimal maxEvents = rule.Threshold ?? 5;
-        var windowStart = DateTime.UtcNow.AddMinutes(-windowMinutes);
+        DateTime windowStart = DateTime.UtcNow.AddMinutes(-windowMinutes);
 
+        // Conta eventos de transferência ou frequência do mesmo IP no último minuto
         int recentEvents = await _db.SecurityEvents.CountAsync(e =>
             (e.EventType == EventTypes.Transfer || e.EventType == EventTypes.TransactionFrequency) &&
             e.IPAddress == ev.IPAddress &&
             e.Timestamp >= windowStart);
 
-        bool triggered = recentEvents >= maxEvents;
-        string details = $"{recentEvents} pedidos de transação detetados do IP {ev.IPAddress} em menos de {windowMinutes} minuto(s).";
+        if (recentEvents >= maxEvents)
+        {
+            return recentEvents + " pedidos de transação detetados do IP " + ev.IPAddress + " em " + windowMinutes + " minuto(s).";
+        }
 
-        return (triggered, details);
+        return "";
     }
 
-    // regra 4: verifica se o mesmo cliente fez demasiadas transações na ultima hora
-    private async Task<(bool Triggered, string Details)> CheckClientHourlyLimitAsync(SecurityEvent ev, DetectionRule rule)
+    // Regra 4: verifica se o mesmo cliente (IBAN) fez demasiadas transações na última hora
+    private async Task<string> CheckClientHourlyLimitAsync(SecurityEvent ev, DetectionRule rule)
     {
-        if (ev.TransactionID is not int transactionId)
-            return (false, string.Empty);
+        // Se o evento não tiver uma transação associada, não dá para saber o cliente
+        if (ev.TransactionID == null)
+        {
+            return "";
+        }
 
-        var transaction = await _db.BankTransactions.FindAsync(transactionId);
-        if (transaction is null)
-            return (false, string.Empty);
+        // Procura a transação na BD para descobrir o IBAN de origem
+        BankTransaction? transaction = await _db.BankTransactions.FindAsync(ev.TransactionID.Value);
+        if (transaction == null)
+        {
+            return "";
+        }
 
         int windowMinutes = rule.TimeWindowMinutes ?? 60;
         decimal maxTransactions = rule.Threshold ?? 10;
-        var windowStart = DateTime.UtcNow.AddMinutes(-windowMinutes);
+        DateTime windowStart = DateTime.UtcNow.AddMinutes(-windowMinutes);
 
+        // Conta quantas transações esse IBAN fez nos últimos 60 minutos
         int clientTransactions = await _db.BankTransactions.CountAsync(t =>
             t.SenderIBAN == transaction.SenderIBAN &&
             t.Timestamp >= windowStart);
 
-        bool triggered = clientTransactions >= maxTransactions;
-        string details = $"O cliente {transaction.SenderIBAN} realizou {clientTransactions} transações nos últimos {windowMinutes} minutos.";
+        if (clientTransactions >= maxTransactions)
+        {
+            return "O cliente " + transaction.SenderIBAN + " realizou " + clientTransactions + " transações nos últimos " + windowMinutes + " minutos.";
+        }
 
-        return (triggered, details);
+        return "";
     }
 
-    // obtém o valor da transação na BD ou em alternativa lê o campo "amount" do JSON
-    private async Task<decimal> ResolveTransactionAmountAsync(SecurityEvent ev)
+    // Método auxiliar: obtém o valor da transação a partir da tabela BankTransaction ou do texto JSON do evento
+    private async Task<decimal> GetTransactionAmountAsync(SecurityEvent ev)
     {
-        if (ev.TransactionID is int transactionId)
+        // Primeiro tenta ir buscar o valor real à tabela das transações bancárias
+        if (ev.TransactionID != null)
         {
-            var transaction = await _db.BankTransactions.FindAsync(transactionId);
-            if (transaction is not null)
-                return transaction.Amount;
-        }
-
-        try
-        {
-            using var json = JsonDocument.Parse(ev.RawPayload);
-            if (json.RootElement.TryGetProperty("amount", out var amountProp) &&
-                amountProp.TryGetDecimal(out var parsedAmount))
+            BankTransaction? transaction = await _db.BankTransactions.FindAsync(ev.TransactionID.Value);
+            if (transaction != null)
             {
-                return parsedAmount;
+                return transaction.Amount;
             }
         }
-        catch (JsonException)
+
+        // Se ainda não houver registo na tabela (ex: testes via curl), lê o campo "amount" do JSON
+        try
         {
-            
+            using JsonDocument json = JsonDocument.Parse(ev.RawPayload);
+            if (json.RootElement.TryGetProperty("amount", out JsonElement amountProp))
+            {
+                return amountProp.GetDecimal();
+            }
+        }
+        catch
+        {
+            // Se o texto não for JSON válido ou não tiver "amount", devolve 0 sem dar erro
         }
 
         return 0m;
