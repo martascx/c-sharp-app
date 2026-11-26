@@ -8,7 +8,6 @@ public class BancoDbContext : DbContext
     {
     }
 
-    // Representa a tabela Host da base de dados Banco
     public DbSet<Models.Host> Hosts { get; set; }
 
     public DbSet<Models.Client> Clients { get; set; }

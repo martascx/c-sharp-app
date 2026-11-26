@@ -102,12 +102,11 @@ export class App {
   readonly incidents = signal<Incident[]>([]);
 
   readonly rules = signal<DetectionRule[]>([
-    { id: 1, name: 'Large Transaction', description: 'Detects transactions above the configured amount.', eventType: 'TRANSACTION', threshold: '> €5,000', severity: 'High', enabled: false },
+    { id: 1, name: 'Large Transaction', description: 'Detects transactions above the configured amount.', eventType: 'TRANSACTION', threshold: '> €5,000', severity: 'High', enabled: true },
     { id: 2, name: 'High Transaction Frequency', description: 'Detects an unusually high number of transactions within a time window.', eventType: 'TRANSACTION_FREQUENCY', threshold: '5 requests / 1 min', severity: 'High', enabled: true },
     { id: 3, name: 'High Client Activity (1h)', description: 'Detects a single client making too many transaction requests within 1 hour.', eventType: 'CLIENT_HOURLY_LIMIT', threshold: '10 transactions / 60 min', severity: 'Medium', enabled: true },
     { id: 4, name: 'Repeated Failed Logins', description: 'Detects repeated failed authentication attempts.', eventType: 'FAILED_LOGIN', threshold: '5 attempts / 10 min', severity: 'Critical', enabled: true },
     { id: 5, name: 'Inactive Host', description: 'Detects hosts that have stopped reporting activity.', eventType: 'HOST_INACTIVITY', threshold: '30 min inactive', severity: 'High', enabled: true },
-    { id: 6, name: 'Large Transfer', description: 'Detects transfers above the configured amount.', eventType: 'TRANSFER', threshold: '> €10,000', severity: 'Critical', enabled: true },
   ]);
 
   readonly severityCounts = computed(() => {
