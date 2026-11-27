@@ -7,7 +7,7 @@ namespace Buteo.EdgeCollector.Api.Services;
 
 public class RuleEngineService
 {
-    // Atributo privado para aceder à base de dados (o "_" é convenção para atributos privados)
+    // Atributo privado para aceder à base de dados
     private readonly BancoDbContext _db;
 
     // Construtor: recebe a ligação à base de dados quando o serviço é criado

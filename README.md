@@ -1,58 +1,69 @@
-﻿# Buteo — Edge Collector & SOAR API (.NET)
+﻿# Buteo — Edge Collector & SOAR
 
 > **Academias Natixis | Dev Stream** — Projeto de Avaliação do Módulo de C# / .NET
 >
 >
 >
-> **Domínio:** Cibersegurança, Telemetria de Infraestrutura e Resposta Automatizada a Incidentes (SIEM/SOAR).
+> **Domínio:** Cibersegurança, Telemetria de Infraestrutura Bancária e Gestão de Incidentes (SIEM/SOAR).
 
 ## 1. Visão Geral e Objetivo
 
-O **Buteo Edge Collector API** é um motor de ingestão de telemetria e correlação de segurança desenvolvido em **ASP.NET Core (.NET 10)**. A aplicação atua como um coletor central que recebe eventos de segurança enviados por agentes de borda (ou simuladores HTTP), armazena-os em memória através de estruturas `List<T>` protegidas contra concorrência e aplica regras automáticas de deteção de ameaças em tempo real.
+O **Buteo** é uma plataforma de recolha de eventos de segurança (*Edge Collector*) e deteção automática de ameaças desenvolvida em **ASP.NET Core (.NET)** com persistência em **SQL Server** e painel de monitorização web.
 
-### Regras de Correlação Implementadas
+A API recebe eventos de autenticação, telemetria de servidores e transações bancárias, persiste-os numa base de dados relacional através de **Entity Framework Core** e avalia-os em tempo real contra regras de deteção dinâmicas configuráveis na tabela `DetectionRule`. Sempre que uma regra é violada, é gerado automaticamente um incidente (`Incident`) pronto para triagem e resolução na interface web.
 
-- **Ataque de Força Bruta (`AUTH_FAIL`):** Dispara automaticamente um incidente (`HIGH`) quando são registadas **5 ou mais falhas de autenticação** provenientes do mesmo endereço IP de origem (`sourceIp`).
-- **Escalada de Privilégios (`PRIVILEGE_ESCALATION`):** Gera imediatamente um incidente (`CRITICAL`) perante qualquer tentativa de alteração de permissões administrativas no nó monitorizado.
-- **Anomalia Transacional Bancária (`BANK_TX`):** Sinaliza um incidente (`CRITICAL`) quando é processada uma operação financeira com montante superior a **10.000,00 €**, alterando o estado do servidor afetado para `UNDER_ATTACK`.
+### Regras de Deteção Implementadas
+
+Todas as regras são lidas dinamicamente da base de dados (`DetectionRule`) tendo em conta o estado `IsEnabled`, o limiar (`Threshold`) e a janela temporal (`TimeWindowMinutes`):
+
+1. **Tentativas Repetidas de Login Falhadas (`FAILED_LOGIN`) —*****Critical*** Dispara quando são registadas **5 ou mais falhas de autenticação** provenientes do mesmo endereço IP numa janela de **10 minutos**. É acionada automaticamente através do endpoint de login.
+2. **Transferência de Valor Elevado (`TRANSFER`) —*****Critical*** Sinaliza qualquer transferência bancária cujo montante ultrapasse o limite configurado (**10.000,00 €**), consultando a tabela `BankTransaction` ou o payload JSON do evento.
+3. **Rajada de Transações por IP (`TRANSACTION_FREQUENCY`) —*****High*** Deteta comportamentos automatizados ou *bots* quando chegam **5 ou mais pedidos de transação** do mesmo endereço IP em **1 minuto**.
+4. **Limite Horário por Cliente (`CLIENT_HOURLY_LIMIT`) —*****Medium*** Vigila o volume de operações por conta bancária (`SenderIBAN`), disparando alerta quando o mesmo cliente realiza **10 ou mais transações** nos últimos **60 minutos**.
+5. **Inatividade de Servidor (`HOST_INACTIVITY`) —*****High*** Verifica, através de `DateTime` e `TimeSpan`, se algum servidor ativo (`HostStatus = true`) deixou de enviar sinal de vida (*ping*) há mais de **30 minutos**. Ao disparar, gera o incidente e altera o estado do servidor para inativo (`false`) para evitar alertas duplicados até que este volte a comunicar.
 
 ## 2. Stack Tecnológica e Arquitetura
 
-- **Framework:** .NET 10 (`ASP.NET Core Web API`)
-- **Persistência:** Estruturas `List<T>` em memória geridas por um serviço `Singleton` com sincronização via `lock` (*Thread-Safety*).
-- **Serialização & Validação:** `System.Text.Json` e *Model Binding* nativo.
-- **Testes & Documentação:** OpenAPI (`/openapi/v1.json`) e ficheiro de pedidos `.http` integrado no IDE.
+- **Backend:** ASP.NET Core Web API (C# / .NET)
+- **Base de Dados:** Microsoft SQL Server (`Banco`) com Entity Framework Core (`BancoDbContext`)
+- **Segurança:** Validação de credenciais com *hashing* `BCrypt` (`BCrypt.Net`)
+- **Frontend:** Aplicação web de gestão de incidentes, eventos, hosts e regras de deteção
+- **Orquestração:** Docker & Docker Compose
 
-### Estrutura de Diretórios
+### Estrutura do Projeto
 
 ```
-Buteo.EdgeCollector/
-├── Buteo.EdgeCollector.sln
-└── Buteo.EdgeCollector.Api/
-    ├── Models/          # Entidades de domínio (Host, SecurityEvent, Incident)
-    ├── Data/            # Repositório Singleton em memória (List<T> + lock)
-    ├── Services/        # Motor de correlação e regras de deteção
-    ├── Endpoints/       # Definição das rotas REST e validação de códigos HTTP
-    ├── Program.cs       # Configuração do pipeline HTTP e Injeção de Dependências
-    └── *.http           # Coleção de pedidos para simulação de ataques
+c-sharp-app/
+├── Buteo.EdgeCollector.Api/
+│   ├── Data/               # BancoDbContext (Entity Framework Core)
+│   ├── Dtos/               # Objetos de transferência de dados (ex: LoginRequest)
+│   ├── Endpoints/          # Rotas REST (AuthEndpoints, HostEndpoints, EventEndpoints, IncidentEndpoints)
+│   ├── Models/             # Entidades (Client, Host, BankTransaction, SecurityEvent, DetectionRule, Incident)
+│   ├── Services/           # RuleEngineService e constantes de EventTypes
+│   └── Program.cs          # Configuração de serviços, BD e mapeamento de endpoints
+├── Buteo_ui/               # Interface web de monitorização (Dashboard, Hosts, Incidents, Rules)
+├── bdqueries.sql           # Script de criação da BD, tabelas, índices e dados iniciais
+├── demo-tests.sh           # Script interativo para demonstração das regras bancárias
+└── docker-compose.yml      # Orquestração dos contentores (SQL Server, API e Frontend)
 ```
 
-## 3. Endpoints da API
+## 3. Principais Endpoints da API
 
-| Método | Rota | Descrição | Códigos HTTP |
-| --- | --- | --- | --- |
-| `POST` | `/api/hosts` | Regista um novo servidor/nó monitorizado no inventário. | `201`, `400`, `409` |
-| `GET` | `/api/hosts` | Lista todos os hosts registados e o respetivo estado operacional. | `200` |
-| `POST` | `/api/events` | Ingere um evento de telemetria e executa o motor de correlação. | `201`, `400`, `404` |
-| `GET` | `/api/hosts/{id}/events` | Consulta o histórico cronológico de eventos de um host específico. | `200`, `404` |
-| `GET` | `/api/incidents` | Lista todos os alertas de segurança gerados automaticamente. | `200` |
-| `PATCH` | `/api/incidents/{id}/mitigate` | Marca um incidente como mitigado e atualiza o estado do host. | `200`, `404`, `409` |
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| `POST` | `/api/auth/login` | Autentica o administrador (`BCrypt`). Em caso de falha, regista evento `FAILED_LOGIN` e avalia a regra de força bruta. |
+| `GET` | `/api/hosts` | Lista os servidores monitorizados e verifica automaticamente se algum ultrapassou o tempo limite de inatividade (`HOST_INACTIVITY`). |
+| `POST` | `/api/hosts/{id}/ping` | Recebe o *heartbeat* de um servidor, atualiza o `Timestamp` e repõe `HostStatus = true`. |
+| `POST` | `/api/events` | Ingere um evento de segurança (`SecurityEvent`) e invoca o `RuleEngineService` para avaliação das regras ativas. |
+| `GET` | `/api/incidents` | Lista os incidentes gerados para visualização no painel **Incident management**. |
+| `PATCH` | `/api/incidents/{id}/status` | Atualiza o estado de um incidente (`New`, `Investigating`, `Resolved`). |
 
 ## 4. Como Executar o Projeto
 
 ### Pré-requisitos
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) instalado.
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e em execução.
+- Cliente SQL (ex.: extensão **SQL Server (mssql)** no VS Code) para executar o script inicial da base de dados.
 
 ### Passos de Execução
 
@@ -60,30 +71,39 @@ Buteo.EdgeCollector/
 
    ```
    git clone https://github.com/martascx/c-sharp-app.git
-   cd Buteo.EdgeCollector
+   cd c-sharp-app
    ```
-2. **Compilar a solução:**
+2. **Construir e arrancar os contentores (SQL Server, API e Frontend):**
 
    ```
-   dotnet build
+   docker compose up -d --build
    ```
-3. **Arrancar a API:**
+3. **Inicializar a base de dados:**
+   - Ligar ao SQL Server em `localhost,1433` (utilizador `sa` e palavra-passe definida no `docker-compose.yml`).
+   - Executar o ficheiro `bdqueries.sql` para criar a base de dados `Banco`, as tabelas e os registos iniciais.
+4. **Aceder à aplicação:**
+   - **Frontend (Painel Web):** `http://localhost:4200`
+   - **API Backend:** `http://localhost:5000`
+
+## 5. Roteiro de Demonstração
+
+Para apresentar todas as regras em tempo real no painel **Incident management**:
+
+1. **Força Bruta (`FAILED_LOGIN`):** No ecrã de login do frontend, falhar a palavra-passe 5 vezes seguidas e entrar à 6.ª tentativa com um utilizador válido (ex.: `John Smith`). Confirmar o alerta crítico no separador **Incidents**.
+2. **Inatividade de Servidor (`HOST_INACTIVITY`):** Recuar o `Timestamp` de um servidor ativo na tabela `Host` em 60 minutos via SQL e abrir o separador **Hosts** no browser. O servidor passa a inativo e o alerta surge na fila de incidentes.
+3. **Regras Bancárias (`TRANSFER`, `TRANSACTION_FREQUENCY` e `CLIENT_HOURLY_LIMIT`):** Executar o guião interativo no terminal (Git Bash):
 
    ```
-   dotnet run --project Buteo.EdgeCollector.Api
+   chmod +x demo-tests.sh
+   ./demo-tests.sh
    ```
-   *(Nota para ambientes Windows com políticas restritivas WDAC/AppLocker: o projeto está configurado com `<UseAppHost>false</UseAppHost>` no `.csproj` para executar diretamente a `.dll` gerida através do runtime `dotnet.exe` sem gerar executáveis `.exe` não assinados).*
-
-## 5. Roteiro de Demonstração (Simulação de Ataques)
-
-1. Enviar `POST /api/hosts` para registar um nó (ex.: `srv-core-banking-01`) e copiar o `id` (`Guid`) devolvido.
-2. Executar uma rajada de 5 pedidos `POST /api/events` com `"eventType": "AUTH_FAIL"` e o mesmo `"sourceIp"`.
-3. Consultar `GET /api/incidents` para verificar a criação automática do alerta de Força Bruta e `GET /api/hosts` para confirmar a alteração do estado do servidor para `UNDER_ATTACK`.
-4. Executar `PATCH /api/incidents/{incidentId}/mitigate` para simular a resposta do analista SOC e repor a normalidade operacional.
+   A cada passo, atualizar o painel **Incidents** para observar a criação dos alertas com os respetivos níveis de severidade e testar a alteração de estado (`New` → `Investigating` → `Resolved`).
 
 ## 6. Equipa e Organização
 
-- **Membro 1:** Camada de Domínio (`Models/`) e Repositório *Thread-Safe* (`Data/`).
-- **Membro 2:** Endpoints de Gestão de Hosts e Mitigação de Incidentes.
-- **Membro 3:** Ingestão de Telemetria e Motor de Regras de Correlação (`Services/`).
-- **Membro 4:** Gestão de Repositório/Kanban, Simulação de Testes (`.http`) e Relatório Técnico.
+| Elemento | Responsabilidade Principal |
+| --- | --- |
+| **[Nome do Elemento 1]** | Motor de Regras (`RuleEngineService`), Endpoints de Monitorização e Testes |
+| **[Nome do Elemento 2]** | Base de Dados (`SQL Server`), Modelos e Endpoints de Autenticação/API |
+| **[Nome do Elemento 3]** | Interface Web (`Buteo_ui`) e Integração Frontend-Backend |
+| **[Nome do Elemento 4]** | Orquestração Docker, Documentação e Gestão de Incidentes |
