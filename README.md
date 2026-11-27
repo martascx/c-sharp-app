@@ -103,7 +103,7 @@ Para apresentar todas as regras em tempo real no painel **Incident management**:
 
 | Elemento | Responsabilidade Principal |
 | --- | --- |
-| **[Nome do Elemento 1]** | Motor de Regras (`RuleEngineService`), Endpoints de Monitorização e Testes |
-| **[Nome do Elemento 2]** | Base de Dados (`SQL Server`), Modelos e Endpoints de Autenticação/API |
-| **[Nome do Elemento 3]** | Interface Web (`Buteo_ui`) e Integração Frontend-Backend |
-| **[Nome do Elemento 4]** | Orquestração Docker, Documentação e Gestão de Incidentes |
+| **Afonso Cruz** | Motor de Regras (`RuleEngineService`), Endpoints de Monitorização e Testes |
+| **Marta Carvalho** | Base de Dados (`SQL Server`), Interface Web (`Buteo_ui`)|
+| **João Magano** | Interface Web (`Buteo_ui`) Integração Frontend-Backend e Endpoints de Autenticação/AP |
+| **Artur Oliveira* | Orquestração Docker, Backend, Endpoints e Models |
